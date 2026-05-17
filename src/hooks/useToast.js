@@ -1,15 +1,72 @@
 import { useState, useCallback } from 'react';
 
-export function useToast() {
-  const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
+const initialToastState = {
+  visible: false,
+  message: '',
+  type: 'info',
+  duration: 2500,
+};
 
-  const showToast = useCallback((message, type = 'info') => {
-    setToast({ visible: true, message, type });
+export function useToast() {
+  const [toast, setToast] = useState(initialToastState);
+
+  const showToast = useCallback((message, type = 'info', duration = 2500) => {
+    if (!message) return;
+
+    setToast({
+      visible: true,
+      message,
+      type,
+      duration,
+    });
   }, []);
 
   const hideToast = useCallback(() => {
-    setToast(prev => ({ ...prev, visible: false }));
+    setToast((prev) => ({
+      ...prev,
+      visible: false,
+    }));
+
+    setTimeout(() => {
+      setToast(initialToastState);
+    }, 300);
   }, []);
 
-  return { toast, showToast, hideToast };
+  const showSuccess = useCallback(
+    (message, duration) => {
+      showToast(message, 'success', duration);
+    },
+    [showToast]
+  );
+
+  const showError = useCallback(
+    (message, duration) => {
+      showToast(message, 'error', duration);
+    },
+    [showToast]
+  );
+
+  const showInfo = useCallback(
+    (message, duration) => {
+      showToast(message, 'info', duration);
+    },
+    [showToast]
+  );
+
+  const showWarning = useCallback(
+    (message, duration) => {
+      showToast(message, 'warning', duration);
+    },
+    [showToast]
+  );
+
+  return {
+    toast,
+    showToast,
+    hideToast,
+    showSuccess,
+    showError,
+    showInfo,
+    showWarning,
+  };
 }

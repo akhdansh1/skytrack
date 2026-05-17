@@ -1,50 +1,192 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, ActivityIndicator,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { getWeatherByCity } from '../services/weatherService';
 import { useWeather } from '../context/WeatherContext';
-import { getWeatherDescription, getWeatherEmoji, formatTemp } from '../utils/weatherUtils';
+import {
+  getWeatherDescription,
+  getWeatherEmoji,
+  formatTemp,
+} from '../utils/weatherUtils';
+
 import Toast from '../components/Toast';
 import { useToast } from '../hooks/useToast';
 
-const POPULAR = ['Jakarta', 'Bandung', 'Surabaya', 'Bali', 'Yogyakarta', 'Medan', 'Makassar', 'Semarang'];
+const POPULAR = [
+  'Jakarta',
+  'Bandung',
+  'Surabaya',
+  'Bali',
+  'Yogyakarta',
+  'Medan',
+  'Makassar',
+  'Semarang',
+];
+
+const getCityNameFromResult = (result) => {
+  return result?.location?.cityName || result?.cityName || '';
+};
+
+const getCountryFromResult = (result) => {
+  return result?.location?.country || result?.country || '';
+};
+
+const getRegionFromResult = (result) => {
+  return result?.location?.region || result?.region || '';
+};
+
+const getLatitudeFromResult = (result) => {
+  return result?.location?.latitude || result?.latitude || null;
+};
+
+const getLongitudeFromResult = (result) => {
+  return result?.location?.longitude || result?.longitude || null;
+};
+
+const getFavoriteName = (item) => {
+  if (typeof item === 'string') {
+    return item;
+  }
+
+  return item?.name || item?.cityName || '';
+};
+
+const getFavoriteCountry = (item) => {
+  if (typeof item === 'string') {
+    return '';
+  }
+
+  return item?.country || '';
+};
 
 export default function SearchScreen() {
-  const [query, setQuery]     = useState('');
-  const [result, setResult]   = useState(null);
+  const [query, setQuery] = useState('');
+  const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
+
   const { favorites, addFavorite, removeFavorite } = useWeather();
   const { toast, showToast, hideToast } = useToast();
   const insets = useSafeAreaInsets();
 
   const search = async (city) => {
-    const q = city || query.trim();
-    if (!q) return;
+    const keyword = city || query.trim();
+
+    if (!keyword) {
+      showToast('Masukkan nama kota terlebih dahulu.', 'warning');
+      return;
+    }
+
     setLoading(true);
     setResult(null);
+
     try {
-      const data = await getWeatherByCity(q);
+      const data = await getWeatherByCity(keyword);
       setResult(data);
-    } catch (e) {
-      showToast(e.message, 'error');
+    } catch (error) {
+      showToast(error.message || 'Gagal mencari data cuaca.', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const isFav  = result && favorites.includes(result.cityName);
-  const code   = result?.current?.weather_code ?? 0;
+  const cityName = getCityNameFromResult(result);
+  const country = getCountryFromResult(result);
+  const region = getRegionFromResult(result);
+  const latitude = getLatitudeFromResult(result);
+  const longitude = getLongitudeFromResult(result);
+
+  const isFav =
+    result &&
+    favorites.some((item) => {
+      const favoriteName = getFavoriteName(item);
+      const favoriteCountry = getFavoriteCountry(item);
+
+      const sameCity =
+        favoriteName.toLowerCase() === cityName.toLowerCase();
+
+      const sameCountry =
+        String(favoriteCountry || '').toLowerCase() ===
+        String(country || '').toLowerCase();
+
+      return sameCity && sameCountry;
+    });
+
+  const code = result?.current?.weather_code ?? 0;
+
+  const handleToggleFavorite = async () => {
+    if (!result || !cityName) {
+      return;
+    }
+
+    if (isFav) {
+      const removeResult = await removeFavorite({
+        name: cityName,
+        country,
+      });
+
+      if (!removeResult.success) {
+        showToast(
+          removeResult.message || 'Gagal menghapus kota dari favorit.',
+          'error'
+        );
+        return;
+      }
+
+      showToast('Dihapus dari favorit.', 'info');
+      return;
+    }
+
+    const addResult = await addFavorite({
+      name: cityName,
+      region,
+      country,
+      latitude,
+      longitude,
+    });
+
+    if (!addResult.success) {
+      showToast(
+        addResult.message || 'Gagal menambahkan kota ke favorit.',
+        'error'
+      );
+      return;
+    }
+
+    showToast('Ditambahkan ke favorit ❤️', 'success');
+  };
 
   return (
-    <LinearGradient colors={['#0f0c29', '#302b63', '#24243e']} style={styles.container}>
-      <Toast message={toast.message} type={toast.type} visible={toast.visible} onHide={hideToast} />
+    <LinearGradient
+      colors={['#0f0c29', '#302b63', '#24243e']}
+      style={styles.container}
+    >
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        visible={toast.visible}
+        duration={toast.duration}
+        onHide={hideToast}
+      />
+
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}
+        contentContainerStyle={[
+          styles.scroll,
+          {
+            paddingTop: insets.top + 16,
+            paddingBottom: insets.bottom + 16,
+          },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -52,7 +194,13 @@ export default function SearchScreen() {
 
         <View style={styles.searchRow}>
           <View style={styles.inputWrapper}>
-            <Ionicons name="search-outline" size={18} color="#888" style={{ marginRight: 8 }} />
+            <Ionicons
+              name="search-outline"
+              size={18}
+              color="#888"
+              style={{ marginRight: 8 }}
+            />
+
             <TextInput
               style={styles.input}
               placeholder="Nama kota..."
@@ -63,16 +211,30 @@ export default function SearchScreen() {
               onSubmitEditing={() => search()}
             />
           </View>
-          <TouchableOpacity style={styles.searchBtn} onPress={() => search()} activeOpacity={0.85}>
+
+          <TouchableOpacity
+            style={styles.searchBtn}
+            onPress={() => search()}
+            activeOpacity={0.85}
+          >
             <Ionicons name="search" size={20} color="#fff" />
           </TouchableOpacity>
         </View>
 
-        {/* Popular cities */}
         <Text style={styles.sectionLabel}>Kota Populer</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsRow}>
-          {POPULAR.map(city => (
-            <TouchableOpacity key={city} style={styles.chip} onPress={() => search(city)} activeOpacity={0.8}>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.chipsRow}
+        >
+          {POPULAR.map((city) => (
+            <TouchableOpacity
+              key={city}
+              style={styles.chip}
+              onPress={() => search(city)}
+              activeOpacity={0.8}
+            >
               <Text style={styles.chipText}>{city}</Text>
             </TouchableOpacity>
           ))}
@@ -81,42 +243,72 @@ export default function SearchScreen() {
         {loading && (
           <View style={styles.center}>
             <ActivityIndicator size="large" color="#e94560" />
+            <Text style={styles.loadingText}>Mencari data cuaca...</Text>
           </View>
         )}
 
         {result && !loading && (
           <View style={styles.resultCard}>
             <View style={styles.resultHeader}>
-              <View>
-                <Text style={styles.cityName}>{result.cityName}</Text>
-                <Text style={styles.country}>{result.country}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cityName}>{cityName}</Text>
+
+                <Text style={styles.country}>
+                  {[region, country].filter(Boolean).join(', ')}
+                </Text>
               </View>
+
               <TouchableOpacity
-                onPress={() => {
-                  if (isFav) { removeFavorite(result.cityName); showToast('Dihapus dari favorit', 'info'); }
-                  else       { addFavorite(result.cityName);    showToast('Ditambahkan ke favorit ❤️', 'success'); }
+                onPress={handleToggleFavorite}
+                hitSlop={{
+                  top: 10,
+                  bottom: 10,
+                  left: 10,
+                  right: 10,
                 }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Ionicons name={isFav ? 'heart' : 'heart-outline'} size={26} color={isFav ? '#e94560' : '#fff'} />
+                <Ionicons
+                  name={isFav ? 'heart' : 'heart-outline'}
+                  size={26}
+                  color={isFav ? '#e94560' : '#fff'}
+                />
               </TouchableOpacity>
             </View>
 
             <View style={styles.mainWeather}>
               <Text style={styles.emoji}>{getWeatherEmoji(code)}</Text>
-              <Text style={styles.temp}>{formatTemp(result.current.temperature_2m)}</Text>
-              <Text style={styles.desc}>{getWeatherDescription(code)}</Text>
+
+              <Text style={styles.temp}>
+                {formatTemp(result.current.temperature_2m)}
+              </Text>
+
+              <Text style={styles.desc}>
+                {getWeatherDescription(code)}
+              </Text>
             </View>
 
             <View style={styles.statsRow}>
               {[
-                { icon: 'water-outline',      label: 'Kelembapan', value: `${result.current.relative_humidity_2m}%` },
-                { icon: 'speedometer-outline', label: 'Angin',     value: `${Math.round(result.current.wind_speed_10m)} km/h` },
-              ].map((s, i) => (
-                <View key={i} style={styles.statCard}>
-                  <Ionicons name={s.icon} size={18} color="rgba(255,255,255,0.7)" />
-                  <Text style={styles.statValue}>{s.value}</Text>
-                  <Text style={styles.statLabel}>{s.label}</Text>
+                {
+                  icon: 'water-outline',
+                  label: 'Kelembapan',
+                  value: `${result.current.relative_humidity_2m}%`,
+                },
+                {
+                  icon: 'speedometer-outline',
+                  label: 'Angin',
+                  value: `${Math.round(result.current.wind_speed_10m)} km/h`,
+                },
+              ].map((item, index) => (
+                <View key={index} style={styles.statCard}>
+                  <Ionicons
+                    name={item.icon}
+                    size={18}
+                    color="rgba(255,255,255,0.7)"
+                  />
+
+                  <Text style={styles.statValue}>{item.value}</Text>
+                  <Text style={styles.statLabel}>{item.label}</Text>
                 </View>
               ))}
             </View>
@@ -128,32 +320,139 @@ export default function SearchScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scroll:    { paddingHorizontal: 20, flexGrow: 1 },
-  title:     { fontSize: 24, fontWeight: '800', color: '#fff', marginBottom: 20 },
-  searchRow: { flexDirection: 'row', gap: 10, marginBottom: 24 },
-  inputWrapper: {
-    flex: 1, flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 14,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 14,
+  container: {
+    flex: 1,
   },
-  input:     { flex: 1, color: '#fff', fontSize: 15, paddingVertical: 14 },
-  searchBtn: { backgroundColor: '#e94560', borderRadius: 14, width: 52, justifyContent: 'center', alignItems: 'center' },
-  sectionLabel: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.5)', marginBottom: 12 },
-  chipsRow:  { marginBottom: 24 },
-  chip:      { backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginRight: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
-  chipText:  { color: '#fff', fontSize: 13, fontWeight: '500' },
-  center:    { paddingTop: 60, alignItems: 'center' },
-  resultCard: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  resultHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-  cityName:  { fontSize: 22, fontWeight: '800', color: '#fff' },
-  country:   { fontSize: 13, color: 'rgba(255,255,255,0.5)', marginTop: 2 },
-  mainWeather: { alignItems: 'center', marginBottom: 20 },
-  emoji: { fontSize: 56, marginBottom: 8 },
-  temp:  { fontSize: 52, fontWeight: '200', color: '#fff', marginBottom: 4 },
-  desc:  { fontSize: 16, color: 'rgba(255,255,255,0.7)' },
-  statsRow: { flexDirection: 'row', gap: 12 },
-  statCard: { flex: 1, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 14, padding: 14, alignItems: 'center', gap: 4 },
-  statValue: { fontSize: 15, fontWeight: '700', color: '#fff' },
-  statLabel: { fontSize: 11, color: 'rgba(255,255,255,0.5)' },
+  scroll: {
+    paddingHorizontal: 20,
+    flexGrow: 1,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#fff',
+    marginBottom: 20,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 24,
+  },
+  inputWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    paddingHorizontal: 14,
+  },
+  input: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 15,
+    paddingVertical: 14,
+  },
+  searchBtn: {
+    backgroundColor: '#e94560',
+    borderRadius: 14,
+    width: 52,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sectionLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.5)',
+    marginBottom: 12,
+  },
+  chipsRow: {
+    marginBottom: 24,
+  },
+  chip: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  chipText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  center: {
+    paddingTop: 60,
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: 'rgba(255,255,255,0.6)',
+    marginTop: 12,
+    fontSize: 14,
+  },
+  resultCard: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  resultHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  cityName: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  country: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.5)',
+    marginTop: 2,
+  },
+  mainWeather: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  emoji: {
+    fontSize: 56,
+    marginBottom: 8,
+  },
+  temp: {
+    fontSize: 52,
+    fontWeight: '200',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  desc: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.7)',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 14,
+    padding: 14,
+    alignItems: 'center',
+    gap: 4,
+  },
+  statValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  statLabel: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.5)',
+  },
 });
