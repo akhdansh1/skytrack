@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useWeather } from '../context/WeatherContext';
-import { getWeatherByCity } from '../services/weatherService';
+import { getWeatherByCity, getWeatherByCoords } from '../services/weatherService';
 import {
   getWeatherDescription,
   getWeatherEmoji,
@@ -76,7 +76,15 @@ export default function FavoritesScreen() {
       }));
 
       try {
-        const data = await getWeatherByCity(cityName);
+        let data;
+
+        // Gunakan koordinat jika tersedia (lebih akurat)
+        if (city?.latitude && city?.longitude) {
+          data = await getWeatherByCoords(city.latitude, city.longitude);
+        } else {
+          // Fallback ke nama kota jika koordinat tidak ada
+          data = await getWeatherByCity(cityName);
+        }
 
         setWeatherData((prev) => ({
           ...prev,
