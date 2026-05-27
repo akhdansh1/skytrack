@@ -15,6 +15,14 @@ const validateUserId = (userId) => {
   }
 };
 
+// Menghapus prefix administratif agar kompatibel dengan API cuaca
+const cleanCityName = (name) => {
+  if (!name) return '';
+  return name
+    .replace(/^(Kecamatan|Kelurahan|Kabupaten|Kota Administrasi|Kota)\s+/i, '')
+    .trim();
+};
+
 const normalizeCity = (city) => {
   if (!city) {
     throw new Error('Data kota tidak boleh kosong.');
@@ -22,7 +30,7 @@ const normalizeCity = (city) => {
 
   if (typeof city === 'string') {
     return {
-      name: city.trim(),
+      name: cleanCityName(city.trim()),
       country: '',
       region: '',
       latitude: null,
@@ -31,7 +39,7 @@ const normalizeCity = (city) => {
   }
 
   return {
-    name: city.name?.trim() || city.cityName?.trim() || '',
+    name: cleanCityName(city.name?.trim() || city.cityName?.trim() || ''),
     country: city.country || '',
     region: city.region || city.admin1 || '',
     latitude: city.latitude || null,

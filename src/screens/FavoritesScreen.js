@@ -22,11 +22,19 @@ import {
 import Toast from '../components/Toast';
 import { useToast } from '../hooks/useToast';
 
+// Menghapus prefix administratif agar kompatibel dengan API cuaca
+// Menangani data lama yang sudah terlanjur tersimpan dengan nama lengkap
+const cleanCityName = (name) => {
+  if (!name) return '';
+  return name
+    .replace(/^(Kecamatan|Kelurahan|Kabupaten|Kota Administrasi|Kota)\s+/i, '')
+    .trim();
+};
+
 const getCityName = (city) => {
   if (typeof city === 'string') {
     return city;
   }
-
   return city?.name || city?.cityName || '';
 };
 
@@ -34,7 +42,6 @@ const getCityRegion = (city) => {
   if (typeof city === 'string') {
     return '';
   }
-
   return city?.region || city?.admin1 || '';
 };
 
@@ -42,14 +49,12 @@ const getCityCountry = (city) => {
   if (typeof city === 'string') {
     return '';
   }
-
   return city?.country || '';
 };
 
 const getCityKey = (city) => {
   const name = getCityName(city);
   const country = getCityCountry(city);
-
   return `${name}-${country}`;
 };
 
@@ -70,10 +75,7 @@ export default function FavoritesScreen() {
       if (!cityName) return;
       if (weatherData[cityKey] || loading[cityKey]) return;
 
-      setLoading((prev) => ({
-        ...prev,
-        [cityKey]: true,
-      }));
+      setLoading((prev) => ({ ...prev, [cityKey]: true }));
 
       try {
         let data;
@@ -82,21 +84,15 @@ export default function FavoritesScreen() {
         if (city?.latitude && city?.longitude) {
           data = await getWeatherByCoords(city.latitude, city.longitude);
         } else {
-          // Fallback ke nama kota jika koordinat tidak ada
-          data = await getWeatherByCity(cityName);
+          // Fallback ke nama kota — bersihkan prefix dulu untuk data lama
+          data = await getWeatherByCity(cleanCityName(cityName));
         }
 
-        setWeatherData((prev) => ({
-          ...prev,
-          [cityKey]: data,
-        }));
+        setWeatherData((prev) => ({ ...prev, [cityKey]: data }));
       } catch {
         showToast(`Gagal memuat cuaca ${cityName}`, 'error');
       } finally {
-        setLoading((prev) => ({
-          ...prev,
-          [cityKey]: false,
-        }));
+        setLoading((prev) => ({ ...prev, [cityKey]: false }));
       }
     },
     [weatherData, loading, showToast]
